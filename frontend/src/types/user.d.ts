@@ -4,7 +4,7 @@ interface IUser {
   password: string;
   scope: string;
   locale: string;
-  perm: Permissions;
+  perm: UserPermissions;
   commands: string[];
   rules: IRule[];
   lockPassword: boolean;
@@ -24,7 +24,7 @@ interface IUserForm {
   password?: string;
   scope?: string;
   locale?: string;
-  perm?: Permissions;
+  perm?: UserPermissions;
   commands?: string[];
   rules?: IRule[];
   lockPassword?: boolean;
@@ -33,7 +33,7 @@ interface IUserForm {
   dateFormat?: boolean;
 }
 
-interface Permissions {
+interface UserPermissions {
   admin: boolean;
   copy: boolean;
   create: boolean;
