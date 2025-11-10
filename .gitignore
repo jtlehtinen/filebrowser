@@ -5,11 +5,8 @@ rice-box.go
 .idea/
 /filebrowser
 /filebrowser.exe
-/dist
-.venv
 
 .DS_Store
-node_modules
 
 # local env files
 .env.local
@@ -29,14 +26,3 @@ yarn-error.log*
 *.sw*
 bin/
 build/
-
-# Vue distributable files
-/frontend/dist/*
-
-# Playwright files
-/frontend/test-results/
-/frontend/playwright-report/
-/frontend/playwright/.cache/
-
-default.nix
-Dockerfile.dev
