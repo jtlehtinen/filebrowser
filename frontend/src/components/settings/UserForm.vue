@@ -39,11 +39,11 @@
 
     <p>
       <label for="locale">{{ t("settings.language") }}</label>
-      <languages
+      <Languages
         class="input input--block"
         id="locale"
         v-model:locale="user.locale"
-      ></languages>
+      ></Languages>
     </p>
 
     <p v-if="!isDefault && user.perm">

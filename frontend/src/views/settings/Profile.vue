@@ -20,10 +20,10 @@
             {{ t("settings.setDateFormat") }}
           </p>
           <h3>{{ t("settings.language") }}</h3>
-          <languages
+          <Languages
             class="input input--block"
             v-model:locale="locale"
-          ></languages>
+          ></Languages>
 
           <h3>{{ t("settings.aceEditorTheme") }}</h3>
           <AceEditorTheme
