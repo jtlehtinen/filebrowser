@@ -29,10 +29,12 @@
 
       <template v-if="dir && selected.length === 0">
         <p>
-          <strong>{{ $t("prompts.numberFiles") }}:</strong> {{ req.numFiles }}
+          <strong>{{ $t("prompts.numberFiles") }}:</strong>
+          {{ req?.numFiles ?? 0 }}
         </p>
         <p>
-          <strong>{{ $t("prompts.numberDirs") }}:</strong> {{ req.numDirs }}
+          <strong>{{ $t("prompts.numberDirs") }}:</strong>
+          {{ req?.numDirs ?? 0 }}
         </p>
       </template>
 
@@ -99,98 +101,127 @@
   </div>
 </template>
 
-<script>
-import { mapActions, mapState } from "pinia";
+<script setup lang="ts">
+import { inject, computed } from "vue";
+import { storeToRefs } from "pinia";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { filesize } from "@/utils";
 import dayjs from "dayjs";
 import { files as api } from "@/api";
+import { useRoute } from "vue-router";
 
-export default {
-  name: "info",
-  inject: ["$showError"],
-  computed: {
-    ...mapState(useFileStore, [
-      "req",
-      "selected",
-      "selectedCount",
-      "isListing",
-    ]),
-    humanSize: function () {
-      if (this.selectedCount === 0 || !this.isListing) {
-        return filesize(this.req.size);
-      }
+const $showError = inject<(e: unknown) => void>("$showError");
+const route = useRoute();
 
-      let sum = 0;
+const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
 
-      for (const selected of this.selected) {
-        sum += this.req.items[selected].size;
-      }
+const { req, selected, selectedCount, isListing } = storeToRefs(fileStore);
 
-      return filesize(sum);
-    },
-    humanTime: function () {
-      if (this.selectedCount === 0) {
-        return dayjs(this.req.modified).fromNow();
-      }
+const humanSize = computed(() => {
+  if (req.value == null) {
+    return "-";
+  }
 
-      return dayjs(this.req.items[this.selected[0]].modified).fromNow();
-    },
-    modTime: function () {
-      if (this.selectedCount === 0) {
-        return new Date(Date.parse(this.req.modified)).toLocaleString();
-      }
+  if (selectedCount.value === 0 || !isListing.value) {
+    return filesize(req.value.size);
+  }
+  let sum = 0;
+  for (const idx of selected.value) {
+    sum += req.value.items[idx].size;
+  }
+  return filesize(sum);
+});
 
-      return new Date(
-        Date.parse(this.req.items[this.selected[0]].modified)
-      ).toLocaleString();
-    },
-    name: function () {
-      return this.selectedCount === 0
-        ? this.req.name
-        : this.req.items[this.selected[0]].name;
-    },
-    dir: function () {
-      return (
-        this.selectedCount > 1 ||
-        (this.selectedCount === 0
-          ? this.req.isDir
-          : this.req.items[this.selected[0]].isDir)
-      );
-    },
-    resolution: function () {
-      if (this.selectedCount === 1) {
-        const selectedItem = this.req.items[this.selected[0]];
-        if (selectedItem && selectedItem.type === "image") {
-          return selectedItem.resolution;
-        }
-      } else if (this.req && this.req.type === "image") {
-        return this.req.resolution;
-      }
-      return null;
-    },
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["closeHovers"]),
-    checksum: async function (event, algo) {
-      event.preventDefault();
+const humanTime = computed(() => {
+  if (req.value == null) {
+    return "-";
+  }
 
-      let link;
+  if (selectedCount.value === 0) {
+    return dayjs(req.value.modified).fromNow();
+  }
+  return dayjs(req.value.items[selected.value[0]].modified).fromNow();
+});
 
-      if (this.selectedCount) {
-        link = this.req.items[this.selected[0]].url;
-      } else {
-        link = this.$route.path;
-      }
+const modTime = computed(() => {
+  if (req.value == null) {
+    return "-";
+  }
 
-      try {
-        const hash = await api.checksum(link, algo);
-        event.target.textContent = hash;
-      } catch (e) {
-        this.$showError(e);
-      }
-    },
-  },
-};
+  if (selectedCount.value === 0) {
+    return new Date(Date.parse(req.value.modified)).toLocaleString();
+  }
+  return new Date(
+    Date.parse(req.value.items[selected.value[0]].modified)
+  ).toLocaleString();
+});
+
+const name = computed(() => {
+  if (req.value == null) {
+    return "-";
+  }
+
+  return selectedCount.value === 0
+    ? req.value.name
+    : req.value.items[selected.value[0]].name;
+});
+
+const dir = computed(() => {
+  if (req.value == null) {
+    return false;
+  }
+
+  return (
+    selectedCount.value > 1 ||
+    (selectedCount.value === 0
+      ? req.value.isDir
+      : req.value.items[selected.value[0]].isDir)
+  );
+});
+
+const resolution = computed(() => {
+  if (req.value == null) {
+    return null;
+  }
+
+  if (selectedCount.value === 1) {
+    const selectedItem = req.value.items[selected.value[0]];
+    if (selectedItem && selectedItem.type === "image") {
+      // @ts-expect-error Fix the type definition later
+      return selectedItem.resolution;
+    }
+  } else if (req.value && req.value.type === "image") {
+    // @ts-expect-error Fix the type definition later
+    return req.value.resolution;
+  }
+  return null;
+});
+
+const closeHovers = layoutStore.closeHovers;
+
+/**
+ * Show checksum for a file.
+ */
+async function checksum(event: Event, algo: ChecksumAlg) {
+  event.preventDefault();
+
+  if (req.value == null) {
+    return;
+  }
+
+  let link: string;
+  if (selectedCount.value) {
+    link = req.value.items[selected.value[0]].url;
+  } else {
+    link = route.path;
+  }
+  try {
+    const hash = await api.checksum(link, algo);
+    (event.target as HTMLElement).textContent = hash;
+  } catch (e) {
+    $showError?.(e);
+  }
+}
 </script>
