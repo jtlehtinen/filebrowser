@@ -10,7 +10,6 @@
   "scripts": {
     "dev": "vite dev",
     "build": "pnpm run typecheck && vite build",
-    "clean": "find ./dist -maxdepth 1 -mindepth 1 ! -name '.gitkeep' -exec rm -r {} +",
     "typecheck": "vue-tsc -p ./tsconfig.tsc.json --noEmit",
     "lint": "eslint src/",
     "lint:fix": "eslint --fix src/",
