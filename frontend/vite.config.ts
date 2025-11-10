@@ -48,6 +48,8 @@ export default defineConfig(({ command }) => {
       resolve,
       base: "",
       build: {
+        outDir: "../backend/web/dist",
+        emptyOutDir: true,
         rollupOptions: {
           input: {
             index: path.resolve(__dirname, "./public/index.html"),

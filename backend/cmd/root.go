@@ -27,12 +27,12 @@ import (
 	"github.com/filebrowser/filebrowser/v2/auth"
 	"github.com/filebrowser/filebrowser/v2/diskcache"
 	fbErrors "github.com/filebrowser/filebrowser/v2/errors"
-	"github.com/filebrowser/filebrowser/v2/frontend"
 	fbhttp "github.com/filebrowser/filebrowser/v2/http"
 	"github.com/filebrowser/filebrowser/v2/img"
 	"github.com/filebrowser/filebrowser/v2/settings"
 	"github.com/filebrowser/filebrowser/v2/storage"
 	"github.com/filebrowser/filebrowser/v2/users"
+	"github.com/filebrowser/filebrowser/v2/web"
 )
 
 var (
@@ -196,7 +196,7 @@ user created with the credentials from options "username" and "password".`,
 			}
 		}
 
-		assetsFs, err := fs.Sub(frontend.Assets(), "dist")
+		assetsFs, err := fs.Sub(web.Assets(), "dist")
 		if err != nil {
 			panic(err)
 		}
