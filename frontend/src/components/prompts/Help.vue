@@ -34,14 +34,11 @@
   </div>
 </template>
 
-<script>
-import { mapActions } from "pinia";
+<script setup lang="ts">
 import { useLayoutStore } from "@/stores/layout";
 
-export default {
-  name: "help",
-  methods: {
-    ...mapActions(useLayoutStore, ["closeHovers"]),
-  },
-};
+function closeHovers(): void {
+  const layoutStore = useLayoutStore();
+  layoutStore.closeHovers();
+}
 </script>

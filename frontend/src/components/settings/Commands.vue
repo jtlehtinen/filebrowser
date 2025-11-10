@@ -8,23 +8,18 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "permissions",
-  props: ["commands"],
-  computed: {
-    raw: {
-      get() {
-        return this.commands.join(" ");
-      },
-      set(value) {
-        if (value !== "") {
-          this.$emit("update:commands", value.split(" "));
-        } else {
-          this.$emit("update:commands", []);
-        }
-      },
-    },
+<script setup lang="ts">
+import { computed } from "vue";
+
+const props = defineProps<{ commands: string[] }>();
+const emit = defineEmits<{ (e: "update:commands", value: string[]): void }>();
+
+const raw = computed({
+  get() {
+    return props.commands.join(" ");
   },
-};
+  set(value: string) {
+    emit("update:commands", value !== "" ? value.split(" ") : []);
+  },
+});
 </script>
