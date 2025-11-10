@@ -55,7 +55,7 @@
       {{ t("settings.lockPassword") }}
     </p>
 
-    <permissions v-model:perm="user.perm" />
+    <Permissions v-model:perm="user.perm" />
     <commands v-if="enableExec" v-model:commands="user.commands" />
 
     <div v-if="!isDefault">

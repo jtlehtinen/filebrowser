@@ -32,18 +32,18 @@
   </form>
 </template>
 
-<script>
+<script lang="ts">
 export default {
   name: "rules-textarea",
   props: ["rules"],
   methods: {
-    remove(event, index) {
+    remove(event: MouseEvent, index: number) {
       event.preventDefault();
       const rules = [...this.rules];
       rules.splice(index, 1);
       this.$emit("update:rules", [...rules]);
     },
-    create(event) {
+    create(event: MouseEvent) {
       event.preventDefault();
 
       this.$emit("update:rules", [

@@ -24,7 +24,7 @@ export default defineConfigWithVueTs(
       // TODO: theres too many of these from before ts
       "@typescript-eslint/no-explicit-any": "off",
       // TODO: finish the ts conversion
-      "vue/block-lang": "off",
+      "vue/block-lang": "warn",
       "vue/multi-word-component-names": "off",
       "vue/no-mutating-props": [
         "error",
