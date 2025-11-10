@@ -72,6 +72,7 @@
     "terser": "^5.43.1",
     "vite": "^6.4.1",
     "vite-plugin-compression2": "^1.0.0",
+    "vite-plugin-vue-devtools": "^8.0.3",
     "vue-tsc": "^2.2.0"
   },
   "packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0"

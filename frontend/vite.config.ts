@@ -2,6 +2,7 @@ import path from "node:path";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import VueI18nPlugin from "@intlify/unplugin-vue-i18n/vite";
+import VueDevTools from "vite-plugin-vue-devtools";
 import { compression } from "vite-plugin-compression2";
 
 const plugins = [
@@ -10,6 +11,11 @@ const plugins = [
     include: [path.resolve(__dirname, "./src/i18n/**/*.json")],
   }),
   compression({ include: /\.js$/i, deleteOriginalAssets: true }),
+  VueDevTools({
+    componentInspector: {
+      toggleComboKey: "control-x",
+    },
+  }),
 ];
 
 const resolve = {
