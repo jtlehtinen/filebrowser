@@ -24,157 +24,152 @@
   </div>
 </template>
 
-<script>
-import { mapState, mapActions } from "pinia";
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, inject } from "vue";
+import { storeToRefs } from "pinia";
 import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
-
 import url from "@/utils/url";
 import { files } from "@/api";
 import { StatusError } from "@/api/utils.js";
 
-export default {
-  name: "file-list",
-  props: {
-    exclude: {
-      type: Array,
-      default: () => [],
-    },
-  },
-  data: function () {
-    return {
-      items: [],
-      touches: {
-        id: "",
-        count: 0,
+const props = defineProps<{ exclude?: string[] }>();
+const emit = defineEmits<{ "update:selected": [value: string] }>();
+const $showError = inject<(e: unknown) => void>("$showError");
+
+const { user } = storeToRefs(useAuthStore());
+const { req } = storeToRefs(useFileStore());
+const { showHover } = useLayoutStore();
+
+const items = ref<{ name: string; url: string }[]>([]);
+const touches = ref({ id: "", count: 0 });
+const selected = ref<string | null>(null);
+const current = ref(window.location.pathname);
+let nextAbortController = new AbortController();
+
+const nav = computed(() => decodeURIComponent(current.value));
+
+function abortOngoingNext() {
+  nextAbortController.abort();
+}
+
+function fillOptions(request: {
+  url: string;
+  items: null | { isDir: boolean; url: string; name: string }[];
+}) {
+  current.value = request.url;
+  items.value = [];
+
+  emit("update:selected", current.value);
+
+  if (request.url !== "/files/") {
+    items.value.push({
+      name: "..",
+      url: url.removeLastDir(request.url) + "/",
+    });
+  }
+
+  if (request.items === null) return;
+
+  for (const item of request.items) {
+    if (!item.isDir) continue;
+    if (props.exclude?.includes(item.url)) continue;
+
+    items.value.push({
+      name: item.name,
+      url: item.url,
+    });
+  }
+}
+
+async function next(event: Event) {
+  const target = event.currentTarget as HTMLElement;
+  const uri = target.dataset.url;
+  if (!uri) return;
+  abortOngoingNext();
+  nextAbortController = new AbortController();
+  try {
+    const response = await files.fetch(uri, nextAbortController.signal);
+    fillOptions(response);
+  } catch (e) {
+    if (e instanceof StatusError && e.is_canceled) {
+      return;
+    }
+    $showError?.(e);
+  }
+}
+
+function touchstart(event: TouchEvent | MouseEvent) {
+  const target = event.currentTarget as HTMLElement;
+  const url = target.dataset.url;
+  if (!url) return;
+
+  setTimeout(() => {
+    touches.value.count = 0;
+  }, 300);
+
+  if (touches.value.id !== url) {
+    touches.value.id = url;
+    touches.value.count = 1;
+    return;
+  }
+
+  touches.value.count++;
+
+  if (touches.value.count > 1) {
+    next(event);
+  }
+}
+
+function itemClick(event: MouseEvent) {
+  if (user.value?.singleClick) next(event);
+  else select(event);
+}
+
+function select(event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement;
+  const url = target.dataset.url;
+  if (!url) return;
+
+  if (selected.value === url) {
+    selected.value = null;
+    emit("update:selected", current.value);
+    return;
+  }
+
+  selected.value = url;
+  emit("update:selected", selected.value);
+}
+
+/**
+ * Shows the new directory creation prompt.
+ */
+async function createDir() {
+  try {
+    showHover({
+      prompt: "newDir",
+      // @ts-expect-error Deal with this later.
+      action: null,
+      confirm: null,
+      props: {
+        redirect: false,
+        base:
+          current.value === (window as any).$route?.path ? null : current.value,
       },
-      selected: null,
-      current: window.location.pathname,
-      nextAbortController: new AbortController(),
-    };
-  },
-  inject: ["$showError"],
-  computed: {
-    ...mapState(useAuthStore, ["user"]),
-    ...mapState(useFileStore, ["req"]),
-    nav() {
-      return decodeURIComponent(this.current);
-    },
-  },
-  mounted() {
-    this.fillOptions(this.req);
-  },
-  unmounted() {
-    this.abortOngoingNext();
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["showHover"]),
-    abortOngoingNext() {
-      this.nextAbortController.abort();
-    },
-    fillOptions(req) {
-      // Sets the current path and resets
-      // the current items.
-      this.current = req.url;
-      this.items = [];
+    });
+  } catch (e) {
+    console.error("createDir error:", e);
+  }
+}
 
-      this.$emit("update:selected", this.current);
+onMounted(() => {
+  fillOptions(req.value!);
+});
 
-      // If the path isn't the root path,
-      // show a button to navigate to the previous
-      // directory.
-      if (req.url !== "/files/") {
-        this.items.push({
-          name: "..",
-          url: url.removeLastDir(req.url) + "/",
-        });
-      }
+onUnmounted(() => {
+  abortOngoingNext();
+});
 
-      // If this folder is empty, finish here.
-      if (req.items === null) return;
-
-      // Otherwise we add every directory to the
-      // move options.
-      for (const item of req.items) {
-        if (!item.isDir) continue;
-        if (this.exclude?.includes(item.url)) continue;
-
-        this.items.push({
-          name: item.name,
-          url: item.url,
-        });
-      }
-    },
-    next: function (event) {
-      // Retrieves the URL of the directory the user
-      // just clicked in and fill the options with its
-      // content.
-      const uri = event.currentTarget.dataset.url;
-      this.abortOngoingNext();
-      this.nextAbortController = new AbortController();
-      files
-        .fetch(uri, this.nextAbortController.signal)
-        .then(this.fillOptions)
-        .catch((e) => {
-          if (e instanceof StatusError && e.is_canceled) {
-            return;
-          }
-          this.$showError(e);
-        });
-    },
-    touchstart(event) {
-      const url = event.currentTarget.dataset.url;
-
-      // In 300 milliseconds, we shall reset the count.
-      setTimeout(() => {
-        this.touches.count = 0;
-      }, 300);
-
-      // If the element the user is touching
-      // is different from the last one he touched,
-      // reset the count.
-      if (this.touches.id !== url) {
-        this.touches.id = url;
-        this.touches.count = 1;
-        return;
-      }
-
-      this.touches.count++;
-
-      // If there is more than one touch already,
-      // open the next screen.
-      if (this.touches.count > 1) {
-        this.next(event);
-      }
-    },
-    itemClick: function (event) {
-      if (this.user.singleClick) this.next(event);
-      else this.select(event);
-    },
-    select: function (event) {
-      // If the element is already selected, unselect it.
-      if (this.selected === event.currentTarget.dataset.url) {
-        this.selected = null;
-        this.$emit("update:selected", this.current);
-        return;
-      }
-
-      // Otherwise select the element.
-      this.selected = event.currentTarget.dataset.url;
-      this.$emit("update:selected", this.selected);
-    },
-    createDir: async function () {
-      this.showHover({
-        prompt: "newDir",
-        action: null,
-        confirm: null,
-        props: {
-          redirect: false,
-          base: this.current === this.$route.path ? null : this.current,
-        },
-      });
-    },
-  },
-};
+defineExpose({ createDir });
 </script>

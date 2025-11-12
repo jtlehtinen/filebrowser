@@ -40,80 +40,73 @@
   </div>
 </template>
 
-<script>
-import { mapActions, mapState, mapWritableState } from "pinia";
+<script setup lang="ts">
+import { ref, computed, inject, onMounted } from "vue";
+import { storeToRefs } from "pinia";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import url from "@/utils/url";
 import { files as api } from "@/api";
 import { removePrefix } from "@/api/utils";
 
-export default {
-  name: "rename",
-  data: function () {
-    return {
-      name: "",
-    };
-  },
-  created() {
-    this.name = this.oldName();
-  },
-  inject: ["$showError"],
-  computed: {
-    ...mapState(useFileStore, [
-      "req",
-      "selected",
-      "selectedCount",
-      "isListing",
-    ]),
-    ...mapWritableState(useFileStore, ["reload", "preselect"]),
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["closeHovers"]),
-    cancel: function () {
-      this.closeHovers();
-    },
-    oldName: function () {
-      if (!this.isListing) {
-        return this.req.name;
-      }
+const $showError = inject<(e: unknown) => void>("$showError");
 
-      if (this.selectedCount === 0 || this.selectedCount > 1) {
-        // This shouldn't happen.
-        return;
-      }
+const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
 
-      return this.req.items[this.selected[0]].name;
-    },
-    submit: async function () {
-      let oldLink = "";
-      let newLink = "";
+const { req, selected, selectedCount, isListing } = storeToRefs(fileStore);
+const { reload, preselect } = storeToRefs(fileStore);
+const { closeHovers } = layoutStore;
 
-      if (!this.isListing) {
-        oldLink = this.req.url;
-      } else {
-        oldLink = this.req.items[this.selected[0]].url;
-      }
+const name = ref("");
 
-      newLink =
-        url.removeLastDir(oldLink) + "/" + encodeURIComponent(this.name);
+/**
+ * Returns the old name for the item being renamed.
+ */
+const oldName = computed(() => {
+  if (!isListing.value) {
+    return req.value!.name;
+  }
+  if (selectedCount.value === 0 || selectedCount.value > 1) {
+    return;
+  }
+  return req.value!.items[selected.value[0]].name;
+});
 
-      try {
-        await api.move([{ from: oldLink, to: newLink }]);
-        if (!this.isListing) {
-          this.$router.push({ path: newLink });
-          return;
-        }
+onMounted(() => {
+  // @ts-expect-error Deal with this later.
+  name.value = oldName.value;
+});
 
-        this.preselect = removePrefix(newLink);
+/**
+ * Submits the rename request.
+ */
+async function submit() {
+  let oldLink = "";
+  let newLink = "";
 
-        this.reload = true;
-      } catch (e) {
-        this.$showError(e);
-      }
+  if (!isListing.value) {
+    oldLink = req.value!.url;
+  } else {
+    oldLink = req.value!.items[selected.value[0]].url;
+  }
 
-      this.closeHovers();
-    },
-  },
-};
+  newLink = url.removeLastDir(oldLink) + "/" + encodeURIComponent(name.value);
+
+  try {
+    await api.move([{ from: oldLink, to: newLink }]);
+    if (!isListing.value) {
+      // @ts-expect-error: $router is injected by Vue Router
+
+      (getCurrentInstance()?.proxy as any).$router.push({ path: newLink });
+      return;
+    }
+    preselect.value = removePrefix(newLink);
+    reload.value = true;
+  } catch (e) {
+    $showError?.(e);
+  }
+
+  closeHovers();
+}
 </script>

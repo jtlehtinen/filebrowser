@@ -17,10 +17,10 @@
       class="card-action"
       style="display: flex; align-items: center; justify-content: space-between"
     >
-      <template v-if="user.perm.create">
+      <template v-if="user?.perm.create">
         <button
           class="button button--flat"
-          @click="$refs.fileList.createDir()"
+          @click="fileList.createDir()"
           :aria-label="$t('sidebar.newFolder')"
           :title="$t('sidebar.newFolder')"
           style="justify-self: left"
@@ -54,8 +54,9 @@
   </div>
 </template>
 
-<script>
-import { mapActions, mapState, mapWritableState } from "pinia";
+<script setup lang="ts">
+import { ref, computed, inject, toRefs } from "vue";
+import { useRouter } from "vue-router";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { useAuthStore } from "@/stores/auth";
@@ -65,80 +66,77 @@ import buttons from "@/utils/buttons";
 import * as upload from "@/utils/upload";
 import { removePrefix } from "@/api/utils";
 
-export default {
-  name: "move",
-  components: { FileList },
-  data: function () {
-    return {
-      current: window.location.pathname,
-      dest: null,
-    };
-  },
-  inject: ["$showError"],
-  computed: {
-    ...mapState(useFileStore, ["req", "selected"]),
-    ...mapState(useAuthStore, ["user"]),
-    ...mapWritableState(useFileStore, ["preselect"]),
-    excludedFolders() {
-      return this.selected
-        .filter((idx) => this.req.items[idx].isDir)
-        .map((idx) => this.req.items[idx].url);
-    },
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["showHover", "closeHovers"]),
-    move: async function (event) {
-      event.preventDefault();
-      const items = [];
+const fileList = ref<InstanceType<typeof FileList> | null>(null);
+const dest = ref<string | null>(null);
 
-      for (const item of this.selected) {
-        items.push({
-          from: this.req.items[item].url,
-          to: this.dest + encodeURIComponent(this.req.items[item].name),
-          name: this.req.items[item].name,
-        });
+const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
+const authStore = useAuthStore();
+const router = useRouter();
+
+const { req, selected } = toRefs(fileStore);
+const { user } = toRefs(authStore);
+const showHover = layoutStore.showHover;
+const closeHovers = layoutStore.closeHovers;
+
+const $showError = inject<(e: unknown) => void>("$showError");
+
+const excludedFolders = computed(() =>
+  selected.value
+    .filter((idx) => req.value!.items[idx].isDir)
+    .map((idx) => req.value!.items[idx].url)
+);
+
+/**
+ * Move selected files/folders to destination.
+ * Handles conflicts and user confirmation.
+ */
+async function move(event: Event) {
+  event.preventDefault();
+  try {
+    const items = selected.value.map((item) => ({
+      from: req.value!.items[item].url,
+      to: dest.value + encodeURIComponent(req.value!.items[item].name),
+      name: req.value!.items[item].name,
+    }));
+
+    async function action(overwrite: boolean, rename: boolean) {
+      buttons.loading("move");
+      try {
+        await api.move(items, overwrite, rename);
+        buttons.success("move");
+        fileStore.preselect = removePrefix(items[0].to);
+        await router.push({ path: dest.value! });
+      } catch (e) {
+        buttons.done("move");
+        $showError?.(e);
       }
+    }
 
-      const action = async (overwrite, rename) => {
-        buttons.loading("move");
+    const dstItems = (await api.fetch(dest.value!)).items;
+    // @ts-expect-error Deal with this later.
+    const conflict = upload.checkConflict(items, dstItems);
 
-        await api
-          .move(items, overwrite, rename)
-          .then(() => {
-            buttons.success("move");
-            this.preselect = removePrefix(items[0].to);
-            this.$router.push({ path: this.dest });
-          })
-          .catch((e) => {
-            buttons.done("move");
-            this.$showError(e);
-          });
-      };
+    let overwrite = false;
+    let rename = false;
 
-      const dstItems = (await api.fetch(this.dest)).items;
-      const conflict = upload.checkConflict(items, dstItems);
+    if (conflict) {
+      showHover({
+        prompt: "replace-rename",
+        confirm: (event: Event, option: string) => {
+          overwrite = option === "overwrite";
+          rename = option === "rename";
+          event.preventDefault();
+          closeHovers();
+          action(overwrite, rename);
+        },
+      });
+      return;
+    }
 
-      let overwrite = false;
-      let rename = false;
-
-      if (conflict) {
-        this.showHover({
-          prompt: "replace-rename",
-          confirm: (event, option) => {
-            overwrite = option == "overwrite";
-            rename = option == "rename";
-
-            event.preventDefault();
-            this.closeHovers();
-            action(overwrite, rename);
-          },
-        });
-
-        return;
-      }
-
-      action(overwrite, rename);
-    },
-  },
-};
+    await action(overwrite, rename);
+  } catch (e) {
+    $showError?.(e);
+  }
+}
 </script>

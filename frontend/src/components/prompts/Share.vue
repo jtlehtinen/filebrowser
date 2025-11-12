@@ -129,138 +129,156 @@
   </div>
 </template>
 
-<script>
-import { mapActions, mapState } from "pinia";
+<script setup lang="ts">
+import { useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
+import { ref, computed, inject, onBeforeMount } from "vue";
+import { storeToRefs } from "pinia";
 import { useFileStore } from "@/stores/file";
 import { share as api } from "@/api";
 import dayjs from "dayjs";
 import { useLayoutStore } from "@/stores/layout";
 import { copy } from "@/utils/clipboard";
 
-export default {
-  name: "share",
-  data: function () {
-    return {
-      time: 0,
-      unit: "hours",
-      links: [],
-      clip: null,
-      password: "",
-      listing: true,
-    };
-  },
-  inject: ["$showError", "$showSuccess"],
-  computed: {
-    ...mapState(useFileStore, [
-      "req",
-      "selected",
-      "selectedCount",
-      "isListing",
-    ]),
-    url() {
-      if (!this.isListing) {
-        return this.$route.path;
-      }
+const route = useRoute();
+const { t } = useI18n();
 
-      if (this.selectedCount === 0 || this.selectedCount > 1) {
-        // This shouldn't happen.
-        return;
-      }
+const $showError = inject<(e: unknown) => void>("$showError")!;
+const $showSuccess = inject<(msg: string) => void>("$showSuccess")!;
 
-      return this.req.items[this.selected[0]].url;
-    },
-  },
-  async beforeMount() {
+const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
+const { req, selected, selectedCount, isListing } = storeToRefs(fileStore);
+const { closeHovers } = layoutStore;
+
+const time = ref(0);
+const unit = ref("hours");
+const links = ref<any[]>([]);
+const password = ref("");
+const listing = ref(true);
+
+const url = computed(() => {
+  if (!isListing.value) {
+    return route.path;
+  }
+  if (selectedCount.value === 0 || selectedCount.value > 1) {
+    return;
+  }
+  return req.value!.items[selected.value[0]].url;
+});
+
+/**
+ * Sorts the links array by expiration.
+ */
+function sort() {
+  links.value = [...links.value].sort((a, b) => {
+    if (a.expire === 0) return -1;
+    if (b.expire === 0) return 1;
+    return new Date(a.expire).getTime() - new Date(b.expire).getTime();
+  });
+}
+
+/**
+ * Converts a unix timestamp to a human readable string.
+ * @param time - Unix timestamp in seconds
+ */
+function humanTime(time: number) {
+  return dayjs(time * 1000).fromNow();
+}
+
+/**
+ * Builds a share URL from a share object.
+ * @param share - Share object
+ */
+function buildLink(share: any) {
+  return api.getShareURL(share);
+}
+
+/**
+ * Copies text to clipboard and shows a success or error message.
+ * @param text - Text to copy
+ */
+async function copyToClipboard(text: string) {
+  try {
+    await copy({ text });
+    $showSuccess(t("success.linkCopied"));
+  } catch {
     try {
-      const links = await api.get(this.url);
-      this.links = links;
-      this.sort();
-
-      if (this.links.length == 0) {
-        this.listing = false;
-      }
+      await copy({ text }, { permission: true });
+      $showSuccess(t("success.linkCopied"));
     } catch (e) {
-      this.$showError(e);
+      $showError(e);
     }
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["closeHovers"]),
-    copyToClipboard: function (text) {
-      copy({ text }).then(
-        () => {
-          // clipboard successfully set
-          this.$showSuccess(this.$t("success.linkCopied"));
-        },
-        () => {
-          // clipboard write failed
-          copy({ text }, { permission: true }).then(
-            () => {
-              // clipboard successfully set
-              this.$showSuccess(this.$t("success.linkCopied"));
-            },
-            (e) => {
-              // clipboard write failed
-              this.$showError(e);
-            }
-          );
-        }
+  }
+}
+
+/**
+ * Submits a new share link.
+ */
+async function submit() {
+  try {
+    let res = null;
+    if (!time.value) {
+      res = await api.create(url.value!, password.value);
+    } else {
+      res = await api.create(
+        url.value!,
+        password.value,
+        // @ts-expect-error Deal with this later.
+        time.value,
+        unit.value
       );
-    },
-    submit: async function () {
-      try {
-        let res = null;
+    }
+    links.value.push(res);
+    sort();
+    time.value = 0;
+    unit.value = "hours";
+    password.value = "";
+    listing.value = true;
+  } catch (e) {
+    $showError(e);
+  }
+}
 
-        if (!this.time) {
-          res = await api.create(this.url, this.password);
-        } else {
-          res = await api.create(this.url, this.password, this.time, this.unit);
-        }
+/**
+ * Deletes a share link.
+ * @param event - Mouse event
+ * @param link - Link object
+ */
+async function deleteLink(event: Event, link: any) {
+  event.preventDefault();
+  try {
+    await api.remove(link.hash);
+    links.value = links.value.filter((item) => item.hash !== link.hash);
+    if (links.value.length === 0) {
+      listing.value = false;
+    }
+  } catch (e) {
+    $showError(e);
+  }
+}
 
-        this.links.push(res);
-        this.sort();
+/**
+ * Switches between listing and creation mode.
+ */
+function switchListing() {
+  if (links.value.length === 0 && !listing.value) {
+    closeHovers();
+  }
+  listing.value = !listing.value;
+}
 
-        this.time = 0;
-        this.unit = "hours";
-        this.password = "";
-
-        this.listing = true;
-      } catch (e) {
-        this.$showError(e);
-      }
-    },
-    deleteLink: async function (event, link) {
-      event.preventDefault();
-      try {
-        await api.remove(link.hash);
-        this.links = this.links.filter((item) => item.hash !== link.hash);
-
-        if (this.links.length == 0) {
-          this.listing = false;
-        }
-      } catch (e) {
-        this.$showError(e);
-      }
-    },
-    humanTime(time) {
-      return dayjs(time * 1000).fromNow();
-    },
-    buildLink(share) {
-      return api.getShareURL(share);
-    },
-    sort() {
-      this.links = this.links.sort((a, b) => {
-        if (a.expire === 0) return -1;
-        if (b.expire === 0) return 1;
-        return new Date(a.expire) - new Date(b.expire);
-      });
-    },
-    switchListing() {
-      if (this.links.length == 0 && !this.listing) {
-        this.closeHovers();
-      }
-
-      this.listing = !this.listing;
-    },
-  },
-};
+onBeforeMount(async () => {
+  try {
+    const fetchedLinks = await api.get(url.value!);
+    // @ts-expect-error Deal with this later.
+    links.value = fetchedLinks;
+    sort();
+    if (links.value.length === 0) {
+      listing.value = false;
+    }
+  } catch (e) {
+    $showError(e);
+  }
+});
 </script>
