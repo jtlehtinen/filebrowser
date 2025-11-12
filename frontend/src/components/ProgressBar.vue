@@ -5,29 +5,29 @@ https://raw.githubusercontent.com/dzwillia/vue-simple-progress/master/src/compon
   <div>
     <div
       class="vue-simple-progress-text"
-      :style="text_style"
+      :style="textStyle"
       v-if="text.length > 0 && textPosition == 'top'"
     >
       {{ text }}
     </div>
-    <div class="vue-simple-progress" :style="progress_style">
+    <div class="vue-simple-progress" :style="progressStyle">
       <div
         class="vue-simple-progress-text"
-        :style="text_style"
+        :style="textStyle"
         v-if="text.length > 0 && textPosition == 'middle'"
       >
         {{ text }}
       </div>
       <div
         style="position: relative; left: -9999px"
-        :style="text_style"
+        :style="textStyle"
         v-if="text.length > 0 && textPosition == 'inside'"
       >
         {{ text }}
       </div>
-      <div class="vue-simple-progress-bar" :style="bar_style">
+      <div class="vue-simple-progress-bar" :style="barStyle">
         <div
-          :style="text_style"
+          :style="textStyle"
           v-if="text.length > 0 && textPosition == 'inside'"
         >
           {{ text }}
@@ -36,7 +36,7 @@ https://raw.githubusercontent.com/dzwillia/vue-simple-progress/master/src/compon
     </div>
     <div
       class="vue-simple-progress-text"
-      :style="text_style"
+      :style="textStyle"
       v-if="text.length > 0 && textPosition == 'bottom'"
     >
       {{ text }}
@@ -44,182 +44,152 @@ https://raw.githubusercontent.com/dzwillia/vue-simple-progress/master/src/compon
   </div>
 </template>
 
-<script>
-// We're leaving this untouched as you can read in the beginning
-const isNumber = function (n) {
-  return !isNaN(parseFloat(n)) && isFinite(n);
-};
+<script setup lang="ts">
+import { isNumber } from "lodash-es";
+import { computed } from "vue";
 
-export default {
-  name: "progress-bar",
-  props: {
-    val: {
-      default: 0,
-    },
-    max: {
-      default: 100,
-    },
-    size: {
-      // either a number (pixel width/height) or 'tiny', 'small',
-      // 'medium', 'large', 'huge', 'massive' for common sizes
-      default: 3,
-    },
-    "bg-color": {
-      type: String,
-      default: "#eee",
-    },
-    "bar-color": {
-      type: String,
-      default: "#2196f3", // match .blue color to Material Design's 'Blue 500' color
-    },
-    "bar-transition": {
-      type: String,
-      default: "all 0.5s ease",
-    },
-    "bar-border-radius": {
-      type: Number,
-      default: 0,
-    },
-    spacing: {
-      type: Number,
-      default: 4,
-    },
-    text: {
-      type: String,
-      default: "",
-    },
-    "text-align": {
-      type: String,
-      default: "center", // 'left', 'right'
-    },
-    "text-position": {
-      type: String,
-      default: "bottom", // 'bottom', 'top', 'middle', 'inside'
-    },
-    "font-size": {
-      type: Number,
-      default: 13,
-    },
-    "text-fg-color": {
-      type: String,
-      default: "#222",
-    },
-  },
-  computed: {
-    pct() {
-      let pct = (this.val / this.max) * 100;
-      pct = pct.toFixed(2);
-      return Math.min(pct, this.max);
-    },
-    size_px() {
-      switch (this.size) {
-        case "tiny":
-          return 2;
-        case "small":
-          return 4;
-        case "medium":
-          return 8;
-        case "large":
-          return 12;
-        case "big":
-          return 16;
-        case "huge":
-          return 32;
-        case "massive":
-          return 64;
-      }
+const props = defineProps<{
+  val?: number;
+  max?: number;
+  size?: number | string;
+  bgColor?: string;
+  barColor?: string;
+  barTransition?: string;
+  barBorderRadius?: number;
+  spacing?: number;
+  text?: string;
+  textAlign?: string;
+  textPosition?: string;
+  fontSize?: number;
+  textFgColor?: string;
+}>();
 
-      return isNumber(this.size) ? this.size : 32;
-    },
-    text_padding() {
-      switch (this.size) {
-        case "tiny":
-        case "small":
-        case "medium":
-        case "large":
-        case "big":
-        case "huge":
-        case "massive":
-          return Math.min(Math.max(Math.ceil(this.size_px / 8), 3), 12);
-      }
+const val = computed(() => props.val ?? 0);
+const max = computed(() => props.max ?? 100);
+const size = computed(() => props.size ?? 3);
+const bgColor = computed(() => props.bgColor ?? "#eee");
+const barColor = computed(() => props.barColor ?? "#2196f3");
+const barTransition = computed(() => props.barTransition ?? "all 0.5s ease");
+const barBorderRadius = computed(() => props.barBorderRadius ?? 0);
+const spacing = computed(() => props.spacing ?? 4);
+const text = computed(() => props.text ?? "");
+const textAlign = computed(() => props.textAlign ?? "center");
+const textPosition = computed(() => props.textPosition ?? "bottom");
+const fontSize = computed(() => props.fontSize ?? 13);
+const textFgColor = computed(() => props.textFgColor ?? "#222");
 
-      return isNumber(this.spacing) ? this.spacing : 4;
-    },
-    text_font_size() {
-      switch (this.size) {
-        case "tiny":
-        case "small":
-        case "medium":
-        case "large":
-        case "big":
-        case "huge":
-        case "massive":
-          return Math.min(Math.max(Math.ceil(this.size_px * 1.4), 11), 32);
-      }
+const pct = computed(() => {
+  let percent = (val.value / max.value) * 100;
+  percent = parseFloat(percent.toFixed(2));
+  return Math.min(percent, 100);
+});
 
-      return isNumber(this.fontSize) ? this.fontSize : 13;
-    },
-    progress_style() {
-      const style = {
-        background: this.bgColor,
-      };
+const sizePx = computed(() => {
+  switch (size.value) {
+    case "tiny":
+      return 2;
+    case "small":
+      return 4;
+    case "medium":
+      return 8;
+    case "large":
+      return 12;
+    case "big":
+      return 16;
+    case "huge":
+      return 32;
+    case "massive":
+      return 64;
+    default:
+      return isNumber(size.value) ? Number(size.value) : 32;
+  }
+});
 
-      if (this.textPosition == "middle" || this.textPosition == "inside") {
-        style["position"] = "relative";
-        style["min-height"] = this.size_px + "px";
-        style["z-index"] = "-2";
-      }
+const textPadding = computed(() => {
+  switch (size.value) {
+    case "tiny":
+    case "small":
+    case "medium":
+    case "large":
+    case "big":
+    case "huge":
+    case "massive":
+      return Math.min(Math.max(Math.ceil(sizePx.value / 8), 3), 12);
+    default:
+      return isNumber(spacing.value) ? spacing.value : 4;
+  }
+});
 
-      if (this.barBorderRadius > 0) {
-        style["border-radius"] = this.barBorderRadius + "px";
-      }
+const textFontSize = computed(() => {
+  switch (size.value) {
+    case "tiny":
+    case "small":
+    case "medium":
+    case "large":
+    case "big":
+    case "huge":
+    case "massive":
+      return Math.min(Math.max(Math.ceil(sizePx.value * 1.4), 11), 32);
+    default:
+      return isNumber(fontSize.value) ? fontSize.value : 13;
+  }
+});
 
-      return style;
-    },
-    bar_style() {
-      const style = {
-        background: this.barColor,
-        width: this.pct + "%",
-        height: this.size_px + "px",
-        transition: this.barTransition,
-      };
+const progressStyle = computed(() => {
+  const style: Record<string, string | number> = {
+    background: bgColor.value,
+  };
+  if (textPosition.value === "middle" || textPosition.value === "inside") {
+    style.position = "relative";
+    style["min-height"] = `${sizePx.value}px`;
+    style["z-index"] = "-2";
+  }
+  if (barBorderRadius.value > 0) {
+    style["border-radius"] = `${barBorderRadius.value}px`;
+  }
+  return style;
+});
 
-      if (this.barBorderRadius > 0) {
-        style["border-radius"] = this.barBorderRadius + "px";
-      }
+const barStyle = computed(() => {
+  const style: Record<string, string | number> = {
+    background: barColor.value,
+    width: `${pct.value}%`,
+    height: `${sizePx.value}px`,
+    transition: barTransition.value,
+  };
+  if (barBorderRadius.value > 0) {
+    style["border-radius"] = `${barBorderRadius.value}px`;
+  }
+  if (textPosition.value === "middle" || textPosition.value === "inside") {
+    style.position = "absolute";
+    style.top = "0";
+    style.height = "100%";
+    style["min-height"] = `${sizePx.value}px`;
+    style["z-index"] = "-1";
+  }
+  return style;
+});
 
-      if (this.textPosition == "middle" || this.textPosition == "inside") {
-        style["position"] = "absolute";
-        style["top"] = "0";
-        style["height"] = "100%";
-        ((style["min-height"] = this.size_px + "px"),
-          (style["z-index"] = "-1"));
-      }
-
-      return style;
-    },
-    text_style() {
-      const style = {
-        color: this.textFgColor,
-        "font-size": this.text_font_size + "px",
-        "text-align": this.textAlign,
-      };
-
-      if (
-        this.textPosition == "top" ||
-        this.textPosition == "middle" ||
-        this.textPosition == "inside"
-      )
-        style["padding-bottom"] = this.text_padding + "px";
-      if (
-        this.textPosition == "bottom" ||
-        this.textPosition == "middle" ||
-        this.textPosition == "inside"
-      )
-        style["padding-top"] = this.text_padding + "px";
-
-      return style;
-    },
-  },
-};
+const textStyle = computed(() => {
+  const style: Record<string, string | number> = {
+    color: textFgColor.value,
+    "font-size": `${textFontSize.value}px`,
+    "text-align": textAlign.value,
+  };
+  if (
+    textPosition.value === "top" ||
+    textPosition.value === "middle" ||
+    textPosition.value === "inside"
+  ) {
+    style["padding-bottom"] = `${textPadding.value}px`;
+  }
+  if (
+    textPosition.value === "bottom" ||
+    textPosition.value === "middle" ||
+    textPosition.value === "inside"
+  ) {
+    style["padding-top"] = `${textPadding.value}px`;
+  }
+  return style;
+});
 </script>
