@@ -6,7 +6,7 @@
 
     <div class="card-content">
       <p>{{ $t("prompts.copyMessage") }}</p>
-      <file-list
+      <FileList
         ref="fileList"
         @update:selected="(val) => (dest = val)"
         tabindex="1"
@@ -17,10 +17,10 @@
       class="card-action"
       style="display: flex; align-items: center; justify-content: space-between"
     >
-      <template v-if="user.perm.create">
+      <template v-if="user?.perm.create">
         <button
           class="button button--flat"
-          @click="$refs.fileList.createDir()"
+          @click="fileList.createDir()"
           :aria-label="$t('sidebar.newFolder')"
           :title="$t('sidebar.newFolder')"
           style="justify-self: left"
@@ -53,8 +53,10 @@
   </div>
 </template>
 
-<script>
-import { mapActions, mapState, mapWritableState } from "pinia";
+<script setup lang="ts">
+import { ref, inject } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { storeToRefs } from "pinia";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { useAuthStore } from "@/stores/auth";
@@ -64,90 +66,81 @@ import buttons from "@/utils/buttons";
 import * as upload from "@/utils/upload";
 import { removePrefix } from "@/api/utils";
 
-export default {
-  name: "copy",
-  components: { FileList },
-  data: function () {
-    return {
-      current: window.location.pathname,
-      dest: null,
-    };
-  },
-  inject: ["$showError"],
-  computed: {
-    ...mapState(useFileStore, ["req", "selected"]),
-    ...mapState(useAuthStore, ["user"]),
-    ...mapWritableState(useFileStore, ["reload", "preselect"]),
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["showHover", "closeHovers"]),
-    copy: async function (event) {
-      event.preventDefault();
-      const items = [];
+const fileList = ref<InstanceType<typeof FileList> | null>(null);
+const dest = ref<string | null>(null);
 
-      // Create a new promise for each file.
-      for (const item of this.selected) {
-        items.push({
-          from: this.req.items[item].url,
-          to: this.dest + encodeURIComponent(this.req.items[item].name),
-          name: this.req.items[item].name,
-        });
-      }
+const { req, selected, reload, preselect } = storeToRefs(useFileStore());
+const { user } = storeToRefs(useAuthStore());
+const layoutStore = useLayoutStore();
+const router = useRouter();
+const route = useRoute();
 
-      const action = async (overwrite, rename) => {
-        buttons.loading("copy");
+const showHover = layoutStore.showHover;
+const closeHovers = layoutStore.closeHovers;
 
-        await api
-          .copy(items, overwrite, rename)
-          .then(() => {
-            buttons.success("copy");
-            this.preselect = removePrefix(items[0].to);
+const $showError = inject<(e: unknown) => void>("$showError")!;
 
-            if (this.$route.path === this.dest) {
-              this.reload = true;
+/**
+ * Copies selected files to the destination directory.
+ * Handles conflicts and user prompts for overwrite/rename.
+ */
+async function copy(event: Event) {
+  event.preventDefault();
+  if (!dest.value) return;
 
-              return;
-            }
+  const items = selected.value.map((item) => ({
+    from: req.value!.items[item].url,
+    to: dest.value + encodeURIComponent(req.value!.items[item].name),
+    name: req.value!.items[item].name,
+  }));
 
-            this.$router.push({ path: this.dest });
-          })
-          .catch((e) => {
-            buttons.done("copy");
-            this.$showError(e);
-          });
-      };
-
-      if (this.$route.path === this.dest) {
-        this.closeHovers();
-        action(false, true);
-
+  async function action(overwrite: boolean, rename: boolean) {
+    try {
+      buttons.loading("copy");
+      await api.copy(items, overwrite, rename);
+      buttons.success("copy");
+      preselect.value = removePrefix(items[0].to);
+      if (route.path === dest.value) {
+        reload.value = true;
         return;
       }
+      // @ts-expect-error Deal with this later.
+      router.push({ path: dest.value });
+    } catch (e) {
+      buttons.done("copy");
+      $showError(e);
+    }
+  }
 
-      const dstItems = (await api.fetch(this.dest)).items;
-      const conflict = upload.checkConflict(items, dstItems);
+  if (route.path === dest.value) {
+    closeHovers();
+    action(false, true);
+    return;
+  }
 
-      let overwrite = false;
-      let rename = false;
+  try {
+    const dstItems = (await api.fetch(dest.value)).items;
+    // @ts-expect-error Deal with this later.
+    const conflict = upload.checkConflict(items, dstItems);
+    let overwrite = false;
+    let rename = false;
 
-      if (conflict) {
-        this.showHover({
-          prompt: "replace-rename",
-          confirm: (event, option) => {
-            overwrite = option == "overwrite";
-            rename = option == "rename";
-
-            event.preventDefault();
-            this.closeHovers();
-            action(overwrite, rename);
-          },
-        });
-
-        return;
-      }
-
-      action(overwrite, rename);
-    },
-  },
-};
+    if (conflict) {
+      showHover({
+        prompt: "replace-rename",
+        confirm: (event: Event, option: string) => {
+          overwrite = option === "overwrite";
+          rename = option === "rename";
+          event.preventDefault();
+          closeHovers();
+          action(overwrite, rename);
+        },
+      });
+      return;
+    }
+    action(overwrite, rename);
+  } catch (e) {
+    $showError(e);
+  }
+}
 </script>
